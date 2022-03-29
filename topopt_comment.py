@@ -35,30 +35,58 @@ def main(nelx,nely,volfrac,penal,rmin,ft):
             edofMat[el,:]=np.array([2*n1+2, 2*n1+3, 2*n2+2, 2*n2+3,2*n2, 2*n2+1, 2*n1, 2*n1+1])
     # Construct the index pointers for the coo format
     iK = np.kron(edofMat,np.ones((8,1))).flatten()
-    jK = np.kron(edofMat,np.ones((1,8))).flatten()    
+    jK = np.kron(edofMat,np.ones((1,8))).flatten()
+    # for 2D structured mesh or 2D image data 
+    # Pre-computation of matrices for filter
     # Filter: Build (and assemble) the index+data vectors for the coo matrix format
+    # The transformation matrix H describes the filter: H*x./Hs
+    # The upper bound of the size of the 1D-array used for sparse matrix for filter
     nfilter=nelx*nely*((2*(int(np.ceil(rmin))-1)+1)**2)
+    # a 1D-array of indices for rows in sparse matrix for filter
     iH = np.zeros(nfilter)
+    # a 1D-array of indices for columns in sparse matrix for filter
     jH = np.zeros(nfilter)
+    # a 1D-array of values in sparse matrix for filter
     sH = np.zeros(nfilter)
+    # an index used for sparse matrix
     cc=0
+    # loop of column or x
     for i in range(nelx):
+        # loop of row or y
         for j in range(nely):
+            # column first, y first, continuous index in y
+            # first single index in matrix - for filtered design
             row=i*nely+j
+            # lower index for x >=0
             kk1=int(np.maximum(i-(np.ceil(rmin)-1),0))
+            # upper range for x <=nelx
             kk2=int(np.minimum(i+np.ceil(rmin),nelx))
+            # lower index for y >=0
             ll1=int(np.maximum(j-(np.ceil(rmin)-1),0))
+            # upper range for y <=nely
             ll2=int(np.minimum(j+np.ceil(rmin),nely))
+            # loop of the values in the filter (kernel)
+            # loop of a few rows or x
             for k in range(kk1,kk2):
+                # loop of a few columns or y 
                 for l in range(ll1,ll2):
+                    # column first, y first, continuous index in y
+                    # second single index in matrix - for design before filtering
                     col=k*nely+l
+                    # compute the weight or factor based on distance only
                     fac=rmin-np.sqrt(((i-k)*(i-k)+(j-l)*(j-l)))
+                    # save the first single index
                     iH[cc]=row
+                    # save the second single index
                     jH[cc]=col
+                    # save the weight or factor
                     sH[cc]=np.maximum(0.0,fac)
+                    # increase the index used for the sparse matrix for filter
                     cc=cc+1
-    # Finalize assembly and convert to csc format
-    H=coo_matrix((sH,(iH,jH)),shape=(nelx*nely,nelx*nely)).tocsc()  
+    # note that some values in iH, jH and sH are zeros because of cc is smaller than their sizes
+    # Finalize assembly of filter and convert the sparse matrix for filter to csc format
+    H=coo_matrix((sH,(iH,jH)),shape=(nelx*nely,nelx*nely)).tocsc() 
+    # compute the sum of weights or factors in filter (kernel)
     Hs=H.sum(1)
     # BC's and support
     dofs=np.arange(2*(nelx+1)*(nely+1))
